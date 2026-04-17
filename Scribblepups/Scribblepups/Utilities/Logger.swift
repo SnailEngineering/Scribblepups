@@ -1,10 +1,3 @@
-//
-//  Logger.swift
-//  Scribblepups
-//
-//  Created by Kyle Andrews on 4/17/26.
-//
-
 import OSLog
 
 extension Logger {

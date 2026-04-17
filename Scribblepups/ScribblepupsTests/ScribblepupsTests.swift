@@ -1,10 +1,3 @@
-//
-//  ScribblepupsTests.swift
-//  ScribblepupsTests
-//
-//  Created by Kyle Andrews on 4/17/26.
-//
-
 import Testing
 
 struct ScribblepupsTests {

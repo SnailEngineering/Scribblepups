@@ -1,80 +1,34 @@
-//
-//  ContentView.swift
-//  Scribblepups
-//
-//  Created by Kyle Andrews on 4/17/26.
-//
-
 import SwiftUI
-import SwiftData
 
 struct ContentView: View {
-    @Environment(\.modelContext) private var modelContext
-    @Query private var items: [Item]
+    @State private var drawingState = DrawingState()
+    @State private var showBrushPicker = false
 
     var body: some View {
-        NavigationViewWrapper {
-            List {
-                ForEach(items) { item in
-                    NavigationLink {
-                        Text("Item at \(item.timestamp, format: Date.FormatStyle(date: .numeric, time: .standard))")
-                    } label: {
-                        Text(item.timestamp, format: Date.FormatStyle(date: .numeric, time: .standard))
-                    }
-                }
-                .onDelete(perform: deleteItems)
+        VStack(spacing: 0) {
+            ToolBar(state: drawingState, showBrushPicker: $showBrushPicker)
+                .padding(.vertical, 8)
+
+            if showBrushPicker {
+                BrushPicker(
+                    selectedBrush: $drawingState.selectedBrush,
+                    lineWidth: $drawingState.lineWidth
+                )
+                .padding(.bottom, 8)
+                .transition(.move(edge: .top).combined(with: .opacity))
             }
-#if os(macOS)
-            .navigationSplitViewColumnWidth(min: 180, ideal: 200)
-#endif
-            .toolbar {
-#if os(iOS)
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    EditButton()
-                }
-#endif
-                ToolbarItem {
-                    Button(action: addItem) {
-                        Label("Add Item", systemImage: "plus")
-                    }
-                }
-            }
-        }
-    }
 
-    private func addItem() {
-        withAnimation {
-            let newItem = Item(timestamp: Date())
-            modelContext.insert(newItem)
-        }
-    }
+            DrawingCanvas(state: drawingState)
+                .clipShape(RoundedRectangle(cornerRadius: 12))
+                .padding(.horizontal, 8)
 
-    private func deleteItems(offsets: IndexSet) {
-        withAnimation {
-            for index in offsets {
-                modelContext.delete(items[index])
-            }
+            ColorPalette(selectedColor: $drawingState.selectedColor)
+                .padding(.vertical, 8)
         }
-    }
-}
-
-fileprivate struct NavigationViewWrapper<Content: View>: View {
-    let content: () -> Content
-
-    var body: some View {
-#if os(macOS)
-        NavigationSplitView {
-            content()
-        } detail: {
-            Text("Select an item")
-        }
-#else
-        content()
-#endif
+        .animation(.easeInOut(duration: 0.2), value: showBrushPicker)
     }
 }
 
 #Preview {
     ContentView()
-        .modelContainer(for: Item.self, inMemory: true)
 }

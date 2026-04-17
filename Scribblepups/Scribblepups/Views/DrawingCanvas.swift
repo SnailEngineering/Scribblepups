@@ -1,0 +1,169 @@
+import SwiftUI
+
+struct DrawingCanvas: View {
+    @Bindable var state: DrawingState
+
+    var body: some View {
+        Canvas { context, size in
+            // Draw completed strokes
+            for stroke in state.strokes {
+                drawStroke(stroke, in: &context)
+            }
+            // Draw current in-progress stroke
+            if let current = state.currentStroke {
+                drawStroke(current, in: &context)
+            }
+        }
+        .background(state.backgroundColor)
+        .gesture(drawingGesture)
+    }
+
+    private var drawingGesture: some Gesture {
+        DragGesture(minimumDistance: 0)
+            .onChanged { value in
+                if state.currentStroke == nil {
+                    state.beginStroke(at: value.startLocation)
+                }
+                state.continueStroke(to: value.location)
+            }
+            .onEnded { _ in
+                state.endStroke()
+            }
+    }
+
+    private func drawStroke(_ stroke: DrawingStroke, in context: inout GraphicsContext) {
+        guard stroke.points.count > 1 else {
+            // Single point — draw a dot
+            if let point = stroke.points.first {
+                let rect = CGRect(
+                    x: point.location.x - stroke.lineWidth / 2,
+                    y: point.location.y - stroke.lineWidth / 2,
+                    width: stroke.lineWidth,
+                    height: stroke.lineWidth
+                )
+                context.fill(Circle().path(in: rect), with: .color(stroke.color))
+            }
+            return
+        }
+
+        switch stroke.brushType {
+        case .crayon:
+            drawCrayonStroke(stroke, in: &context)
+        case .paintbrush:
+            drawPaintbrushStroke(stroke, in: &context)
+        case .rainbow:
+            drawRainbowStroke(stroke, in: &context)
+        case .sparkle:
+            drawSparkleStroke(stroke, in: &context)
+        case .neon:
+            drawNeonStroke(stroke, in: &context)
+        }
+    }
+
+    // MARK: - Brush Renderers
+
+    private func drawCrayonStroke(_ stroke: DrawingStroke, in context: inout GraphicsContext) {
+        var path = Path()
+        path.move(to: stroke.points[0].location)
+        for i in 1..<stroke.points.count {
+            let prev = stroke.points[i - 1].location
+            let curr = stroke.points[i].location
+            let mid = CGPoint(x: (prev.x + curr.x) / 2, y: (prev.y + curr.y) / 2)
+            path.addQuadCurve(to: mid, control: prev)
+        }
+        var crayonContext = context
+        crayonContext.opacity = 0.85
+        crayonContext.stroke(
+            path,
+            with: .color(stroke.color),
+            style: StrokeStyle(lineWidth: stroke.lineWidth, lineCap: .round, lineJoin: .round)
+        )
+    }
+
+    private func drawPaintbrushStroke(_ stroke: DrawingStroke, in context: inout GraphicsContext) {
+        var path = Path()
+        path.move(to: stroke.points[0].location)
+        for i in 1..<stroke.points.count {
+            let prev = stroke.points[i - 1].location
+            let curr = stroke.points[i].location
+            let mid = CGPoint(x: (prev.x + curr.x) / 2, y: (prev.y + curr.y) / 2)
+            path.addQuadCurve(to: mid, control: prev)
+        }
+        var brushContext = context
+        brushContext.opacity = 0.7
+        brushContext.stroke(
+            path,
+            with: .color(stroke.color),
+            style: StrokeStyle(lineWidth: stroke.lineWidth * 1.5, lineCap: .round, lineJoin: .round)
+        )
+    }
+
+    private func drawRainbowStroke(_ stroke: DrawingStroke, in context: inout GraphicsContext) {
+        let rainbowColors: [Color] = [.red, .orange, .yellow, .green, .blue, .purple]
+        for i in 1..<stroke.points.count {
+            let prev = stroke.points[i - 1].location
+            let curr = stroke.points[i].location
+            let color = rainbowColors[i % rainbowColors.count]
+            var segment = Path()
+            segment.move(to: prev)
+            segment.addLine(to: curr)
+            context.stroke(
+                segment,
+                with: .color(color),
+                style: StrokeStyle(lineWidth: stroke.lineWidth, lineCap: .round, lineJoin: .round)
+            )
+        }
+    }
+
+    private func drawSparkleStroke(_ stroke: DrawingStroke, in context: inout GraphicsContext) {
+        // Base line
+        var path = Path()
+        path.move(to: stroke.points[0].location)
+        for i in 1..<stroke.points.count {
+            path.addLine(to: stroke.points[i].location)
+        }
+        context.stroke(
+            path,
+            with: .color(stroke.color),
+            style: StrokeStyle(lineWidth: stroke.lineWidth * 0.5, lineCap: .round, lineJoin: .round)
+        )
+        // Sparkle dots along the path
+        for (i, point) in stroke.points.enumerated() where i % 4 == 0 {
+            let size = stroke.lineWidth * CGFloat.random(in: 0.3...1.2)
+            let rect = CGRect(
+                x: point.location.x - size / 2,
+                y: point.location.y - size / 2,
+                width: size,
+                height: size
+            )
+            var sparkleContext = context
+            sparkleContext.opacity = Double.random(in: 0.5...1.0)
+            sparkleContext.fill(Circle().path(in: rect), with: .color(stroke.color))
+        }
+    }
+
+    private func drawNeonStroke(_ stroke: DrawingStroke, in context: inout GraphicsContext) {
+        var path = Path()
+        path.move(to: stroke.points[0].location)
+        for i in 1..<stroke.points.count {
+            let prev = stroke.points[i - 1].location
+            let curr = stroke.points[i].location
+            let mid = CGPoint(x: (prev.x + curr.x) / 2, y: (prev.y + curr.y) / 2)
+            path.addQuadCurve(to: mid, control: prev)
+        }
+        // Outer glow
+        var glowContext = context
+        glowContext.opacity = 0.3
+        glowContext.stroke(
+            path,
+            with: .color(stroke.color),
+            style: StrokeStyle(lineWidth: stroke.lineWidth * 3, lineCap: .round, lineJoin: .round)
+        )
+        // Inner bright core
+        context.stroke(
+            path,
+            with: .color(.white),
+            style: StrokeStyle(lineWidth: stroke.lineWidth * 0.5, lineCap: .round, lineJoin: .round)
+        )
+    }
+}

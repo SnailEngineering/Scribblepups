@@ -1,10 +1,3 @@
-//
-//  ScribblepupsUITests.swift
-//  ScribblepupsUITests
-//
-//  Created by Kyle Andrews on 4/17/26.
-//
-
 import XCTest
 
 final class ScribblepupsUITests: XCTestCase {
