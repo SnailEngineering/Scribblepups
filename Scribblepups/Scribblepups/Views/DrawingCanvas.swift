@@ -55,6 +55,10 @@ struct DrawingCanvas: View {
             drawRainbowStroke(stroke, in: &context)
         case .sparkle:
             drawSparkleStroke(stroke, in: &context)
+        case .bubble:
+            drawBubbleStroke(stroke, in: &context)
+        case .watercolor:
+            drawWatercolorStroke(stroke, in: &context)
         case .neon:
             drawNeonStroke(stroke, in: &context)
         }
@@ -139,6 +143,53 @@ struct DrawingCanvas: View {
             var sparkleContext = context
             sparkleContext.opacity = Double.random(in: 0.5...1.0)
             sparkleContext.fill(Circle().path(in: rect), with: .color(stroke.color))
+        }
+    }
+
+    private func drawBubbleStroke(_ stroke: DrawingStroke, in context: inout GraphicsContext) {
+        for (i, point) in stroke.points.enumerated() where i % 3 == 0 {
+            let size = stroke.lineWidth * CGFloat.random(in: 0.6...1.4)
+            let rect = CGRect(
+                x: point.location.x - size / 2,
+                y: point.location.y - size / 2,
+                width: size,
+                height: size
+            )
+            var bubbleContext = context
+            bubbleContext.opacity = 0.35
+            bubbleContext.fill(Circle().path(in: rect), with: .color(stroke.color))
+            // Highlight ring
+            var ringContext = context
+            ringContext.opacity = 0.5
+            ringContext.stroke(
+                Circle().path(in: rect),
+                with: .color(stroke.color),
+                style: StrokeStyle(lineWidth: 1.5)
+            )
+        }
+    }
+
+    private func drawWatercolorStroke(_ stroke: DrawingStroke, in context: inout GraphicsContext) {
+        // Multiple semi-transparent passes for a bleed effect
+        for offset in [-2.0, 0.0, 2.0] {
+            var path = Path()
+            let shifted = stroke.points.map {
+                CGPoint(x: $0.location.x + offset, y: $0.location.y + offset)
+            }
+            path.move(to: shifted[0])
+            for i in 1..<shifted.count {
+                let prev = shifted[i - 1]
+                let curr = shifted[i]
+                let mid = CGPoint(x: (prev.x + curr.x) / 2, y: (prev.y + curr.y) / 2)
+                path.addQuadCurve(to: mid, control: prev)
+            }
+            var waterContext = context
+            waterContext.opacity = 0.2
+            waterContext.stroke(
+                path,
+                with: .color(stroke.color),
+                style: StrokeStyle(lineWidth: stroke.lineWidth * 1.8, lineCap: .round, lineJoin: .round)
+            )
         }
     }
 

@@ -3,6 +3,8 @@ import SwiftUI
 struct ToolBar: View {
     @Bindable var state: DrawingState
     @Binding var showBrushPicker: Bool
+    var onSave: () -> Void
+    var onShare: () -> Void
 
     var body: some View {
         HStack(spacing: 16) {
@@ -46,6 +48,24 @@ struct ToolBar: View {
             }
             .disabled(!state.canUndo)
             .accessibilityLabel("Clear canvas")
+
+            Spacer()
+
+            Button(action: onSave) {
+                Image(systemName: "square.and.arrow.down.fill")
+                    .font(.title2)
+                    .frame(width: 48, height: 48)
+            }
+            .disabled(state.strokes.isEmpty)
+            .accessibilityLabel("Save to photos")
+
+            Button(action: onShare) {
+                Image(systemName: "square.and.arrow.up.fill")
+                    .font(.title2)
+                    .frame(width: 48, height: 48)
+            }
+            .disabled(state.strokes.isEmpty)
+            .accessibilityLabel("Share")
         }
         .padding(.horizontal, 12)
     }
