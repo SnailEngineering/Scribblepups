@@ -10,105 +10,101 @@ struct ToolBar: View {
     @State private var photoSelection: PhotosPickerItem?
 
     var body: some View {
-        HStack(spacing: 12) {
-            // Brush
-            Button {
-                state.toolMode = .draw
-                showBrushPicker.toggle()
-                showStickerPicker = false
-            } label: {
-                Image(systemName: state.selectedBrush.iconName)
-                    .font(.title2)
-                    .frame(width: 44, height: 44)
-                    .background(state.toolMode == .draw ? Color.accentColor.opacity(0.15) : .clear)
-                    .clipShape(RoundedRectangle(cornerRadius: 8))
-            }
-            .accessibilityLabel("Brush picker")
-
-            // Eraser
-            Button {
-                state.toolMode = state.toolMode == .eraser ? .draw : .eraser
-                showBrushPicker = false
-                showStickerPicker = false
-            } label: {
-                Image(systemName: "eraser.fill")
-                    .font(.title2)
-                    .frame(width: 44, height: 44)
-                    .background(state.toolMode == .eraser ? Color.accentColor.opacity(0.15) : .clear)
-                    .clipShape(RoundedRectangle(cornerRadius: 8))
-            }
-            .accessibilityLabel("Eraser")
-
-            // Stickers
-            Button {
-                if case .stamp = state.toolMode {
+        HStack(spacing: 0) {
+            // Drawing tools
+            HStack(spacing: 4) {
+                toolButton(
+                    icon: state.selectedBrush.iconName,
+                    isActive: state.toolMode == .draw,
+                    label: "Brush picker"
+                ) {
                     state.toolMode = .draw
+                    showBrushPicker.toggle()
                     showStickerPicker = false
-                } else {
-                    state.toolMode = .stamp(.star)
-                    showStickerPicker = true
-                    showBrushPicker = false
+                    Haptics.selection()
                 }
-            } label: {
-                Image(systemName: "face.smiling.fill")
-                    .font(.title2)
-                    .frame(width: 44, height: 44)
-                    .background({
-                        if case .stamp = state.toolMode { return Color.accentColor.opacity(0.15) }
-                        return Color.clear
-                    }())
-                    .clipShape(RoundedRectangle(cornerRadius: 8))
-            }
-            .accessibilityLabel("Stickers")
 
-            // Photo import
-            PhotosPicker(selection: $photoSelection, matching: .images) {
-                Image(systemName: "photo.badge.plus.fill")
-                    .font(.title2)
-                    .frame(width: 44, height: 44)
+                toolButton(
+                    icon: "eraser.fill",
+                    isActive: state.toolMode == .eraser,
+                    label: "Eraser"
+                ) {
+                    state.toolMode = state.toolMode == .eraser ? .draw : .eraser
+                    showBrushPicker = false
+                    showStickerPicker = false
+                    Haptics.selection()
+                }
+
+                toolButton(
+                    icon: "face.smiling.fill",
+                    isActive: isStampMode,
+                    label: "Stickers"
+                ) {
+                    if isStampMode {
+                        state.toolMode = .draw
+                        showStickerPicker = false
+                    } else {
+                        state.toolMode = .stamp(.star)
+                        showStickerPicker = true
+                        showBrushPicker = false
+                    }
+                    Haptics.selection()
+                }
+
+                PhotosPicker(selection: $photoSelection, matching: .images) {
+                    Image(systemName: "photo.badge.plus.fill")
+                        .font(.title2)
+                        .frame(width: 44, height: 44)
+                }
+                .accessibilityLabel("Import photo")
             }
-            .accessibilityLabel("Import photo")
+            .padding(.horizontal, 4)
+            .padding(.vertical, 4)
+            .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 12))
 
             Spacer()
 
-            // Undo / Redo
-            Button { state.undo() } label: {
-                Image(systemName: "arrow.uturn.backward.circle.fill")
-                    .font(.title2)
-                    .frame(width: 44, height: 44)
-            }
-            .disabled(!state.canUndo)
+            // History controls
+            HStack(spacing: 4) {
+                toolButton(icon: "arrow.uturn.backward", isActive: false, label: "Undo") {
+                    state.undo()
+                    Haptics.tap()
+                }
+                .disabled(!state.canUndo)
 
-            Button { state.redo() } label: {
-                Image(systemName: "arrow.uturn.forward.circle.fill")
-                    .font(.title2)
-                    .frame(width: 44, height: 44)
-            }
-            .disabled(!state.canRedo)
+                toolButton(icon: "arrow.uturn.forward", isActive: false, label: "Redo") {
+                    state.redo()
+                    Haptics.tap()
+                }
+                .disabled(!state.canRedo)
 
-            Button { state.clearCanvas() } label: {
-                Image(systemName: "trash.circle.fill")
-                    .font(.title2)
-                    .frame(width: 44, height: 44)
+                toolButton(icon: "trash", isActive: false, label: "Clear canvas") {
+                    state.clearCanvas()
+                    Haptics.tap()
+                }
+                .disabled(!state.canUndo)
             }
-            .disabled(!state.canUndo)
+            .padding(.horizontal, 4)
+            .padding(.vertical, 4)
+            .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 12))
 
             Spacer()
 
-            // Save / Share
-            Button(action: onSave) {
-                Image(systemName: "square.and.arrow.down.fill")
-                    .font(.title2)
-                    .frame(width: 44, height: 44)
-            }
-            .disabled(state.strokes.isEmpty && state.stickers.isEmpty)
+            // Export controls
+            HStack(spacing: 4) {
+                toolButton(icon: "square.and.arrow.down", isActive: false, label: "Save") {
+                    onSave()
+                }
+                .disabled(!hasContent)
 
-            Button(action: onShare) {
-                Image(systemName: "square.and.arrow.up.fill")
-                    .font(.title2)
-                    .frame(width: 44, height: 44)
+                toolButton(icon: "square.and.arrow.up", isActive: false, label: "Share") {
+                    onShare()
+                }
+                .disabled(!hasContent)
             }
-            .disabled(state.strokes.isEmpty && state.stickers.isEmpty)
+            .padding(.horizontal, 4)
+            .padding(.vertical, 4)
+            .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 12))
         }
         .padding(.horizontal, 12)
         .onChange(of: photoSelection) { _, newValue in
@@ -123,5 +119,31 @@ struct ToolBar: View {
                 photoSelection = nil
             }
         }
+    }
+
+    private var isStampMode: Bool {
+        if case .stamp = state.toolMode { return true }
+        return false
+    }
+
+    private var hasContent: Bool {
+        !state.strokes.isEmpty || !state.stickers.isEmpty
+    }
+
+    private func toolButton(
+        icon: String,
+        isActive: Bool,
+        label: String,
+        action: @escaping () -> Void
+    ) -> some View {
+        Button(action: action) {
+            Image(systemName: icon)
+                .font(.title2)
+                .frame(width: 44, height: 44)
+                .background(isActive ? Color.accentColor.opacity(0.2) : .clear)
+                .clipShape(RoundedRectangle(cornerRadius: 8))
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(label)
     }
 }

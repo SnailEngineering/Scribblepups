@@ -8,7 +8,7 @@ struct ContentView: View {
     @State private var canvasSize: CGSize = .zero
     @State private var showShareSheet = false
     @State private var shareImage: PlatformImage?
-    @State private var showSaveConfirmation = false
+    @State private var showSaveConfetti = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -36,14 +36,22 @@ struct ContentView: View {
                     .transition(.move(edge: .top).combined(with: .opacity))
             }
 
-            DrawingCanvas(state: drawingState)
-                .clipShape(RoundedRectangle(cornerRadius: 12))
-                .padding(.horizontal, 8)
-                .overlay {
-                    GeometryReader { geo in
-                        Color.clear.onAppear { canvasSize = geo.size }
-                    }
+            ZStack {
+                DrawingCanvas(state: drawingState)
+                    .clipShape(RoundedRectangle(cornerRadius: 12))
+
+                if drawingState.strokes.isEmpty && drawingState.stickers.isEmpty && drawingState.backgroundImage == nil {
+                    EmptyCanvasHint()
+                        .allowsHitTesting(false)
                 }
+            }
+            .shadow(color: .black.opacity(0.1), radius: 8, y: 2)
+            .padding(.horizontal, 8)
+            .overlay {
+                GeometryReader { geo in
+                    Color.clear.onAppear { canvasSize = geo.size }
+                }
+            }
 
             ColorPalette(selectedColor: $drawingState.selectedColor)
                 .padding(.vertical, 8)
@@ -51,12 +59,12 @@ struct ContentView: View {
         .animation(.easeInOut(duration: 0.2), value: showBrushPicker)
         .animation(.easeInOut(duration: 0.2), value: showStickerPicker)
         .overlay {
-            if showSaveConfirmation {
-                SaveConfirmationOverlay()
-                    .transition(.scale.combined(with: .opacity))
+            if showSaveConfetti {
+                ConfettiOverlay()
+                    .allowsHitTesting(false)
                     .onAppear {
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
-                            withAnimation { showSaveConfirmation = false }
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
+                            withAnimation { showSaveConfetti = false }
                         }
                     }
             }
@@ -80,29 +88,35 @@ struct ContentView: View {
         guard let image = renderCanvas() else { return }
         #if canImport(UIKit)
         UIImageWriteToSavedPhotosAlbum(image, nil, nil, nil)
-        withAnimation { showSaveConfirmation = true }
-        Logger.storage.info("Drawing saved to Photos")
         #endif
+        Haptics.success()
+        withAnimation { showSaveConfetti = true }
+        Logger.storage.info("Drawing saved to Photos")
     }
 
     private func shareDrawing() {
         guard let image = renderCanvas() else { return }
         shareImage = image
         showShareSheet = true
+        Haptics.tap()
     }
 }
 
-struct SaveConfirmationOverlay: View {
+struct EmptyCanvasHint: View {
+    @State private var bounce = false
+
     var body: some View {
-        VStack(spacing: 8) {
-            Image(systemName: "checkmark.circle.fill")
-                .font(.system(size: 48))
-                .foregroundStyle(.green)
-            Text("Saved!")
-                .font(.headline)
+        VStack(spacing: 12) {
+            Image(systemName: "hand.draw.fill")
+                .font(.system(size: 56))
+                .foregroundStyle(.secondary)
+                .offset(y: bounce ? -6 : 6)
+                .animation(.easeInOut(duration: 1.2).repeatForever(autoreverses: true), value: bounce)
+            Text("Draw something awesome!")
+                .font(.title3.weight(.medium))
+                .foregroundStyle(.secondary)
         }
-        .padding(24)
-        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 16))
+        .onAppear { bounce = true }
     }
 }
 
