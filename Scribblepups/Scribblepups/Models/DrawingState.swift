@@ -5,22 +5,32 @@ import OSLog
 final class DrawingState {
     var strokes: [DrawingStroke] = []
     var currentStroke: DrawingStroke?
+    var stickers: [StickerStamp] = []
     var selectedColor: Color = .black
     var selectedBrush: BrushType = .crayon
     var lineWidth: CGFloat = 8
     var backgroundColor: Color = .white
+    var backgroundImage: PlatformImage?
+    var toolMode: ToolMode = .draw
 
-    private var undoStack: [DrawingStroke] = []
+    private var undoStack: [UndoAction] = []
+    private var redoStack: [UndoAction] = []
 
-    var canUndo: Bool { !strokes.isEmpty }
-    var canRedo: Bool { !undoStack.isEmpty }
+    var canUndo: Bool { !undoStack.isEmpty }
+    var canRedo: Bool { !redoStack.isEmpty }
+
+    // MARK: - Drawing
 
     func beginStroke(at point: CGPoint) {
+        guard toolMode == .draw || toolMode == .eraser else { return }
+        let brush: BrushType = toolMode == .eraser ? .crayon : selectedBrush
+        let color: Color = toolMode == .eraser ? backgroundColor : selectedColor
+        let width: CGFloat = toolMode == .eraser ? lineWidth * 3 : lineWidth
         let stroke = DrawingStroke(
             points: [DrawingPoint(location: point)],
-            color: selectedColor,
-            brushType: selectedBrush,
-            lineWidth: lineWidth
+            color: color,
+            brushType: brush,
+            lineWidth: width
         )
         currentStroke = stroke
         Logger.canvas.debug("Stroke began at \(point.x, privacy: .public), \(point.y, privacy: .public)")
@@ -36,27 +46,78 @@ final class DrawingState {
             return
         }
         strokes.append(stroke)
-        undoStack.removeAll()
+        undoStack.append(.stroke)
+        redoStack.removeAll()
         currentStroke = nil
         Logger.canvas.debug("Stroke ended with \(stroke.points.count, privacy: .public) points")
     }
 
+    // MARK: - Stickers
+
+    func placeSticker(at point: CGPoint) {
+        guard case .stamp(let sticker) = toolMode else { return }
+        let stamp = StickerStamp(sticker: sticker, position: point)
+        stickers.append(stamp)
+        undoStack.append(.sticker)
+        redoStack.removeAll()
+        Logger.canvas.debug("Sticker placed: \(sticker.rawValue, privacy: .public)")
+    }
+
+    // MARK: - Background
+
+    func setBackgroundImage(_ image: PlatformImage?) {
+        backgroundImage = image
+        Logger.canvas.info("Background image updated")
+    }
+
+    // MARK: - Undo / Redo
+
     func undo() {
-        guard let last = strokes.popLast() else { return }
-        undoStack.append(last)
-        Logger.canvas.debug("Undo performed, \(self.strokes.count, privacy: .public) strokes remaining")
+        guard let action = undoStack.popLast() else { return }
+        switch action {
+        case .stroke:
+            if let last = strokes.popLast() {
+                redoStack.append(.strokeData(last))
+            }
+        case .sticker:
+            if let last = stickers.popLast() {
+                redoStack.append(.stickerData(last))
+            }
+        case .strokeData, .stickerData:
+            break
+        }
+        Logger.canvas.debug("Undo performed")
     }
 
     func redo() {
-        guard let last = undoStack.popLast() else { return }
-        strokes.append(last)
-        Logger.canvas.debug("Redo performed, \(self.strokes.count, privacy: .public) strokes total")
+        guard let action = redoStack.popLast() else { return }
+        switch action {
+        case .strokeData(let stroke):
+            strokes.append(stroke)
+            undoStack.append(.stroke)
+        case .stickerData(let stamp):
+            stickers.append(stamp)
+            undoStack.append(.sticker)
+        case .stroke, .sticker:
+            break
+        }
+        Logger.canvas.debug("Redo performed")
     }
 
     func clearCanvas() {
         strokes.removeAll()
+        stickers.removeAll()
         undoStack.removeAll()
+        redoStack.removeAll()
         currentStroke = nil
+        backgroundImage = nil
         Logger.canvas.info("Canvas cleared")
     }
+}
+
+private enum UndoAction {
+    case stroke
+    case sticker
+    case strokeData(DrawingStroke)
+    case stickerData(StickerStamp)
 }

@@ -4,36 +4,67 @@ struct DrawingCanvas: View {
     @Bindable var state: DrawingState
 
     var body: some View {
-        Canvas { context, size in
-            // Draw completed strokes
-            for stroke in state.strokes {
-                drawStroke(stroke, in: &context)
+        ZStack {
+            // Background image layer
+            if let bgImage = state.backgroundImage {
+                #if canImport(UIKit)
+                Image(uiImage: bgImage)
+                    .resizable()
+                    .scaledToFill()
+                #elseif canImport(AppKit)
+                Image(nsImage: bgImage)
+                    .resizable()
+                    .scaledToFill()
+                #endif
             }
-            // Draw current in-progress stroke
-            if let current = state.currentStroke {
-                drawStroke(current, in: &context)
+
+            // Strokes layer
+            Canvas { context, _ in
+                for stroke in state.strokes {
+                    drawStroke(stroke, in: &context)
+                }
+                if let current = state.currentStroke {
+                    drawStroke(current, in: &context)
+                }
+            }
+
+            // Stickers layer
+            ForEach(state.stickers) { stamp in
+                Text(stamp.sticker.emoji)
+                    .font(.system(size: 44 * stamp.scale))
+                    .position(stamp.position)
             }
         }
         .background(state.backgroundColor)
-        .gesture(drawingGesture)
+        .contentShape(Rectangle())
+        .gesture(canvasGesture)
     }
 
-    private var drawingGesture: some Gesture {
+    private var canvasGesture: some Gesture {
         DragGesture(minimumDistance: 0)
             .onChanged { value in
-                if state.currentStroke == nil {
-                    state.beginStroke(at: value.startLocation)
+                switch state.toolMode {
+                case .draw, .eraser:
+                    if state.currentStroke == nil {
+                        state.beginStroke(at: value.startLocation)
+                    }
+                    state.continueStroke(to: value.location)
+                case .stamp:
+                    break
                 }
-                state.continueStroke(to: value.location)
             }
-            .onEnded { _ in
-                state.endStroke()
+            .onEnded { value in
+                switch state.toolMode {
+                case .draw, .eraser:
+                    state.endStroke()
+                case .stamp:
+                    state.placeSticker(at: value.location)
+                }
             }
     }
 
     private func drawStroke(_ stroke: DrawingStroke, in context: inout GraphicsContext) {
         guard stroke.points.count > 1 else {
-            // Single point — draw a dot
             if let point = stroke.points.first {
                 let rect = CGRect(
                     x: point.location.x - stroke.lineWidth / 2,
@@ -66,18 +97,23 @@ struct DrawingCanvas: View {
 
     // MARK: - Brush Renderers
 
-    private func drawCrayonStroke(_ stroke: DrawingStroke, in context: inout GraphicsContext) {
+    private func smoothPath(from points: [DrawingPoint]) -> Path {
         var path = Path()
-        path.move(to: stroke.points[0].location)
-        for i in 1..<stroke.points.count {
-            let prev = stroke.points[i - 1].location
-            let curr = stroke.points[i].location
+        path.move(to: points[0].location)
+        for i in 1..<points.count {
+            let prev = points[i - 1].location
+            let curr = points[i].location
             let mid = CGPoint(x: (prev.x + curr.x) / 2, y: (prev.y + curr.y) / 2)
             path.addQuadCurve(to: mid, control: prev)
         }
-        var crayonContext = context
-        crayonContext.opacity = 0.85
-        crayonContext.stroke(
+        return path
+    }
+
+    private func drawCrayonStroke(_ stroke: DrawingStroke, in context: inout GraphicsContext) {
+        let path = smoothPath(from: stroke.points)
+        var ctx = context
+        ctx.opacity = 0.85
+        ctx.stroke(
             path,
             with: .color(stroke.color),
             style: StrokeStyle(lineWidth: stroke.lineWidth, lineCap: .round, lineJoin: .round)
@@ -85,17 +121,10 @@ struct DrawingCanvas: View {
     }
 
     private func drawPaintbrushStroke(_ stroke: DrawingStroke, in context: inout GraphicsContext) {
-        var path = Path()
-        path.move(to: stroke.points[0].location)
-        for i in 1..<stroke.points.count {
-            let prev = stroke.points[i - 1].location
-            let curr = stroke.points[i].location
-            let mid = CGPoint(x: (prev.x + curr.x) / 2, y: (prev.y + curr.y) / 2)
-            path.addQuadCurve(to: mid, control: prev)
-        }
-        var brushContext = context
-        brushContext.opacity = 0.7
-        brushContext.stroke(
+        let path = smoothPath(from: stroke.points)
+        var ctx = context
+        ctx.opacity = 0.7
+        ctx.stroke(
             path,
             with: .color(stroke.color),
             style: StrokeStyle(lineWidth: stroke.lineWidth * 1.5, lineCap: .round, lineJoin: .round)
@@ -103,24 +132,20 @@ struct DrawingCanvas: View {
     }
 
     private func drawRainbowStroke(_ stroke: DrawingStroke, in context: inout GraphicsContext) {
-        let rainbowColors: [Color] = [.red, .orange, .yellow, .green, .blue, .purple]
+        let colors: [Color] = [.red, .orange, .yellow, .green, .blue, .purple]
         for i in 1..<stroke.points.count {
-            let prev = stroke.points[i - 1].location
-            let curr = stroke.points[i].location
-            let color = rainbowColors[i % rainbowColors.count]
             var segment = Path()
-            segment.move(to: prev)
-            segment.addLine(to: curr)
+            segment.move(to: stroke.points[i - 1].location)
+            segment.addLine(to: stroke.points[i].location)
             context.stroke(
                 segment,
-                with: .color(color),
+                with: .color(colors[i % colors.count]),
                 style: StrokeStyle(lineWidth: stroke.lineWidth, lineCap: .round, lineJoin: .round)
             )
         }
     }
 
     private func drawSparkleStroke(_ stroke: DrawingStroke, in context: inout GraphicsContext) {
-        // Base line
         var path = Path()
         path.move(to: stroke.points[0].location)
         for i in 1..<stroke.points.count {
@@ -131,7 +156,6 @@ struct DrawingCanvas: View {
             with: .color(stroke.color),
             style: StrokeStyle(lineWidth: stroke.lineWidth * 0.5, lineCap: .round, lineJoin: .round)
         )
-        // Sparkle dots along the path
         for (i, point) in stroke.points.enumerated() where i % 4 == 0 {
             let size = stroke.lineWidth * CGFloat.random(in: 0.3...1.2)
             let rect = CGRect(
@@ -140,9 +164,9 @@ struct DrawingCanvas: View {
                 width: size,
                 height: size
             )
-            var sparkleContext = context
-            sparkleContext.opacity = Double.random(in: 0.5...1.0)
-            sparkleContext.fill(Circle().path(in: rect), with: .color(stroke.color))
+            var ctx = context
+            ctx.opacity = Double.random(in: 0.5...1.0)
+            ctx.fill(Circle().path(in: rect), with: .color(stroke.color))
         }
     }
 
@@ -155,37 +179,24 @@ struct DrawingCanvas: View {
                 width: size,
                 height: size
             )
-            var bubbleContext = context
-            bubbleContext.opacity = 0.35
-            bubbleContext.fill(Circle().path(in: rect), with: .color(stroke.color))
-            // Highlight ring
-            var ringContext = context
-            ringContext.opacity = 0.5
-            ringContext.stroke(
-                Circle().path(in: rect),
-                with: .color(stroke.color),
-                style: StrokeStyle(lineWidth: 1.5)
-            )
+            var ctx = context
+            ctx.opacity = 0.35
+            ctx.fill(Circle().path(in: rect), with: .color(stroke.color))
+            var ring = context
+            ring.opacity = 0.5
+            ring.stroke(Circle().path(in: rect), with: .color(stroke.color), style: StrokeStyle(lineWidth: 1.5))
         }
     }
 
     private func drawWatercolorStroke(_ stroke: DrawingStroke, in context: inout GraphicsContext) {
-        // Multiple semi-transparent passes for a bleed effect
         for offset in [-2.0, 0.0, 2.0] {
-            var path = Path()
             let shifted = stroke.points.map {
-                CGPoint(x: $0.location.x + offset, y: $0.location.y + offset)
+                DrawingPoint(location: CGPoint(x: $0.location.x + offset, y: $0.location.y + offset))
             }
-            path.move(to: shifted[0])
-            for i in 1..<shifted.count {
-                let prev = shifted[i - 1]
-                let curr = shifted[i]
-                let mid = CGPoint(x: (prev.x + curr.x) / 2, y: (prev.y + curr.y) / 2)
-                path.addQuadCurve(to: mid, control: prev)
-            }
-            var waterContext = context
-            waterContext.opacity = 0.2
-            waterContext.stroke(
+            let path = smoothPath(from: shifted)
+            var ctx = context
+            ctx.opacity = 0.2
+            ctx.stroke(
                 path,
                 with: .color(stroke.color),
                 style: StrokeStyle(lineWidth: stroke.lineWidth * 1.8, lineCap: .round, lineJoin: .round)
@@ -194,23 +205,14 @@ struct DrawingCanvas: View {
     }
 
     private func drawNeonStroke(_ stroke: DrawingStroke, in context: inout GraphicsContext) {
-        var path = Path()
-        path.move(to: stroke.points[0].location)
-        for i in 1..<stroke.points.count {
-            let prev = stroke.points[i - 1].location
-            let curr = stroke.points[i].location
-            let mid = CGPoint(x: (prev.x + curr.x) / 2, y: (prev.y + curr.y) / 2)
-            path.addQuadCurve(to: mid, control: prev)
-        }
-        // Outer glow
-        var glowContext = context
-        glowContext.opacity = 0.3
-        glowContext.stroke(
+        let path = smoothPath(from: stroke.points)
+        var glow = context
+        glow.opacity = 0.3
+        glow.stroke(
             path,
             with: .color(stroke.color),
             style: StrokeStyle(lineWidth: stroke.lineWidth * 3, lineCap: .round, lineJoin: .round)
         )
-        // Inner bright core
         context.stroke(
             path,
             with: .color(.white),

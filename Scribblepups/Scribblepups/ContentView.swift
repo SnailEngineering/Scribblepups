@@ -4,6 +4,7 @@ import OSLog
 struct ContentView: View {
     @State private var drawingState = DrawingState()
     @State private var showBrushPicker = false
+    @State private var showStickerPicker = false
     @State private var canvasSize: CGSize = .zero
     @State private var showShareSheet = false
     @State private var shareImage: PlatformImage?
@@ -14,6 +15,7 @@ struct ContentView: View {
             ToolBar(
                 state: drawingState,
                 showBrushPicker: $showBrushPicker,
+                showStickerPicker: $showStickerPicker,
                 onSave: saveToPhotos,
                 onShare: shareDrawing
             )
@@ -26,6 +28,12 @@ struct ContentView: View {
                 )
                 .padding(.bottom, 8)
                 .transition(.move(edge: .top).combined(with: .opacity))
+            }
+
+            if showStickerPicker {
+                StickerPicker(toolMode: $drawingState.toolMode)
+                    .padding(.bottom, 8)
+                    .transition(.move(edge: .top).combined(with: .opacity))
             }
 
             DrawingCanvas(state: drawingState)
@@ -41,6 +49,7 @@ struct ContentView: View {
                 .padding(.vertical, 8)
         }
         .animation(.easeInOut(duration: 0.2), value: showBrushPicker)
+        .animation(.easeInOut(duration: 0.2), value: showStickerPicker)
         .overlay {
             if showSaveConfirmation {
                 SaveConfirmationOverlay()
