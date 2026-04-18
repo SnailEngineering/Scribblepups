@@ -13,8 +13,9 @@ final class DrawingState {
     var backgroundImage: PlatformImage?
     var toolMode: ToolMode = .draw
 
-    private var undoStack: [UndoAction] = []
-    private var redoStack: [UndoAction] = []
+    private var undoStack: [UndoRecord] = []
+    private var redoStack: [RedoRecord] = []
+    private let maxUndoDepth = 100
 
     var canUndo: Bool { !undoStack.isEmpty }
     var canRedo: Bool { !redoStack.isEmpty }
@@ -23,14 +24,13 @@ final class DrawingState {
 
     func beginStroke(at point: CGPoint) {
         guard toolMode == .draw || toolMode == .eraser else { return }
-        let brush: BrushType = toolMode == .eraser ? .crayon : selectedBrush
-        let color: Color = toolMode == .eraser ? backgroundColor : selectedColor
-        let width: CGFloat = toolMode == .eraser ? lineWidth * 3 : lineWidth
+        let isEraser = toolMode == .eraser
         let stroke = DrawingStroke(
             points: [DrawingPoint(location: point)],
-            color: color,
-            brushType: brush,
-            lineWidth: width
+            color: isEraser ? .clear : selectedColor,
+            brushType: isEraser ? .crayon : selectedBrush,
+            lineWidth: isEraser ? lineWidth * 3 : lineWidth,
+            isEraser: isEraser
         )
         currentStroke = stroke
         Logger.canvas.debug("Stroke began at \(point.x, privacy: .public), \(point.y, privacy: .public)")
@@ -47,6 +47,9 @@ final class DrawingState {
         }
         strokes.append(stroke)
         undoStack.append(.stroke)
+        if undoStack.count > maxUndoDepth {
+            undoStack.removeFirst()
+        }
         redoStack.removeAll()
         currentStroke = nil
         Logger.canvas.debug("Stroke ended with \(stroke.points.count, privacy: .public) points")
@@ -59,6 +62,9 @@ final class DrawingState {
         let stamp = StickerStamp(sticker: sticker, position: point)
         stickers.append(stamp)
         undoStack.append(.sticker)
+        if undoStack.count > maxUndoDepth {
+            undoStack.removeFirst()
+        }
         redoStack.removeAll()
         Logger.canvas.debug("Sticker placed: \(sticker.rawValue, privacy: .public)")
     }
@@ -77,14 +83,12 @@ final class DrawingState {
         switch action {
         case .stroke:
             if let last = strokes.popLast() {
-                redoStack.append(.strokeData(last))
+                redoStack.append(.stroke(last))
             }
         case .sticker:
             if let last = stickers.popLast() {
-                redoStack.append(.stickerData(last))
+                redoStack.append(.sticker(last))
             }
-        case .strokeData, .stickerData:
-            break
         }
         Logger.canvas.debug("Undo performed")
     }
@@ -92,14 +96,12 @@ final class DrawingState {
     func redo() {
         guard let action = redoStack.popLast() else { return }
         switch action {
-        case .strokeData(let stroke):
+        case .stroke(let stroke):
             strokes.append(stroke)
             undoStack.append(.stroke)
-        case .stickerData(let stamp):
+        case .sticker(let stamp):
             stickers.append(stamp)
             undoStack.append(.sticker)
-        case .stroke, .sticker:
-            break
         }
         Logger.canvas.debug("Redo performed")
     }
@@ -115,9 +117,12 @@ final class DrawingState {
     }
 }
 
-private enum UndoAction {
+private enum UndoRecord {
     case stroke
     case sticker
-    case strokeData(DrawingStroke)
-    case stickerData(StickerStamp)
+}
+
+private enum RedoRecord {
+    case stroke(DrawingStroke)
+    case sticker(StickerStamp)
 }

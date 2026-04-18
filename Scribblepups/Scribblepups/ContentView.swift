@@ -1,4 +1,5 @@
 import SwiftUI
+import Photos
 import OSLog
 
 struct ContentView: View {
@@ -9,6 +10,9 @@ struct ContentView: View {
     @State private var showShareSheet = false
     @State private var shareImage: PlatformImage?
     @State private var showSaveConfetti = false
+    @State private var saveError: String?
+    @State private var showSaveError = false
+    @Environment(\.displayScale) private var displayScale
 
     var body: some View {
         VStack(spacing: 0) {
@@ -49,7 +53,9 @@ struct ContentView: View {
             .padding(.horizontal, 8)
             .overlay {
                 GeometryReader { geo in
-                    Color.clear.onAppear { canvasSize = geo.size }
+                    Color.clear
+                        .onAppear { canvasSize = geo.size }
+                        .onChange(of: geo.size) { _, newSize in canvasSize = newSize }
                 }
             }
 
@@ -63,11 +69,17 @@ struct ContentView: View {
                 ConfettiOverlay()
                     .allowsHitTesting(false)
                     .onAppear {
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
+                        Task {
+                            try? await Task.sleep(for: .seconds(2))
                             withAnimation { showSaveConfetti = false }
                         }
                     }
             }
+        }
+        .alert("Couldn't Save Drawing", isPresented: $showSaveError) {
+            Button("OK") {}
+        } message: {
+            Text(saveError ?? "An unknown error occurred.")
         }
         #if canImport(UIKit)
         .sheet(isPresented: $showShareSheet) {
@@ -81,17 +93,27 @@ struct ContentView: View {
     private func renderCanvas() -> PlatformImage? {
         let canvasView = DrawingCanvas(state: drawingState)
             .frame(width: canvasSize.width, height: canvasSize.height)
-        return CanvasRenderer.renderImage(from: canvasView, size: canvasSize)
+        return CanvasRenderer.renderImage(from: canvasView, size: canvasSize, scale: displayScale)
     }
 
     private func saveToPhotos() {
         guard let image = renderCanvas() else { return }
         #if canImport(UIKit)
-        UIImageWriteToSavedPhotosAlbum(image, nil, nil, nil)
+        Task {
+            do {
+                try await PHPhotoLibrary.shared().performChanges {
+                    PHAssetChangeRequest.creationRequestForAsset(from: image)
+                }
+                withAnimation { showSaveConfetti = true }
+                Haptics.success()
+                Logger.storage.info("Drawing saved to Photos")
+            } catch {
+                saveError = error.localizedDescription
+                showSaveError = true
+                Logger.storage.error("Failed to save drawing: \(error.localizedDescription, privacy: .public)")
+            }
+        }
         #endif
-        Haptics.success()
-        withAnimation { showSaveConfetti = true }
-        Logger.storage.info("Drawing saved to Photos")
     }
 
     private func shareDrawing() {

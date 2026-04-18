@@ -2,9 +2,12 @@ import SwiftUI
 
 struct DrawingCanvas: View {
     @Bindable var state: DrawingState
+    @GestureState private var stampPreviewLocation: CGPoint? = nil
 
     var body: some View {
         ZStack {
+            state.backgroundColor
+
             // Background image layer
             if let bgImage = state.backgroundImage {
                 #if canImport(UIKit)
@@ -18,7 +21,7 @@ struct DrawingCanvas: View {
                 #endif
             }
 
-            // Strokes layer
+            // Strokes layer — drawingGroup isolates blend modes so eraser cuts through correctly
             Canvas { context, _ in
                 for stroke in state.strokes {
                     drawStroke(stroke, in: &context)
@@ -27,6 +30,7 @@ struct DrawingCanvas: View {
                     drawStroke(current, in: &context)
                 }
             }
+            .drawingGroup()
 
             // Stickers layer
             ForEach(state.stickers) { stamp in
@@ -34,14 +38,27 @@ struct DrawingCanvas: View {
                     .font(.system(size: 44 * stamp.scale))
                     .position(stamp.position)
             }
+
+            // Stamp preview follows the finger while dragging
+            if case .stamp(let sticker) = state.toolMode, let loc = stampPreviewLocation {
+                Text(sticker.emoji)
+                    .font(.system(size: 44))
+                    .position(loc)
+                    .opacity(0.6)
+                    .allowsHitTesting(false)
+            }
         }
-        .background(state.backgroundColor)
         .contentShape(Rectangle())
         .gesture(canvasGesture)
     }
 
     private var canvasGesture: some Gesture {
         DragGesture(minimumDistance: 0)
+            .updating($stampPreviewLocation) { value, location, _ in
+                if case .stamp = state.toolMode {
+                    location = value.location
+                }
+            }
             .onChanged { value in
                 switch state.toolMode {
                 case .draw, .eraser:
@@ -64,6 +81,11 @@ struct DrawingCanvas: View {
     }
 
     private func drawStroke(_ stroke: DrawingStroke, in context: inout GraphicsContext) {
+        if stroke.isEraser {
+            drawEraserStroke(stroke, in: &context)
+            return
+        }
+
         guard stroke.points.count > 1 else {
             if let point = stroke.points.first {
                 let rect = CGRect(
@@ -106,7 +128,21 @@ struct DrawingCanvas: View {
             let mid = CGPoint(x: (prev.x + curr.x) / 2, y: (prev.y + curr.y) / 2)
             path.addQuadCurve(to: mid, control: prev)
         }
+        if let last = points.last {
+            path.addLine(to: last.location)
+        }
         return path
+    }
+
+    private func drawEraserStroke(_ stroke: DrawingStroke, in context: inout GraphicsContext) {
+        let path = smoothPath(from: stroke.points)
+        var ctx = context
+        ctx.blendMode = .clear
+        ctx.stroke(
+            path,
+            with: .color(.white),
+            style: StrokeStyle(lineWidth: stroke.lineWidth, lineCap: .round, lineJoin: .round)
+        )
     }
 
     private func drawCrayonStroke(_ stroke: DrawingStroke, in context: inout GraphicsContext) {
@@ -157,7 +193,8 @@ struct DrawingCanvas: View {
             style: StrokeStyle(lineWidth: stroke.lineWidth * 0.5, lineCap: .round, lineJoin: .round)
         )
         for (i, point) in stroke.points.enumerated() where i % 4 == 0 {
-            let size = stroke.lineWidth * CGFloat.random(in: 0.3...1.2)
+            // Use pre-seeded variation so sparkles don't flicker on re-render
+            let size = stroke.lineWidth * point.variation * 0.8
             let rect = CGRect(
                 x: point.location.x - size / 2,
                 y: point.location.y - size / 2,
@@ -165,14 +202,15 @@ struct DrawingCanvas: View {
                 height: size
             )
             var ctx = context
-            ctx.opacity = Double.random(in: 0.5...1.0)
+            ctx.opacity = Double(0.5 + (point.variation - 0.5) * 0.5)
             ctx.fill(Circle().path(in: rect), with: .color(stroke.color))
         }
     }
 
     private func drawBubbleStroke(_ stroke: DrawingStroke, in context: inout GraphicsContext) {
         for (i, point) in stroke.points.enumerated() where i % 3 == 0 {
-            let size = stroke.lineWidth * CGFloat.random(in: 0.6...1.4)
+            // Use pre-seeded variation so bubbles don't flicker on re-render
+            let size = stroke.lineWidth * point.variation
             let rect = CGRect(
                 x: point.location.x - size / 2,
                 y: point.location.y - size / 2,

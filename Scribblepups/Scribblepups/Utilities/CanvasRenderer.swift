@@ -11,9 +11,9 @@ typealias PlatformImage = NSImage
 
 @MainActor
 struct CanvasRenderer {
-    static func renderImage(from view: some View, size: CGSize) -> PlatformImage? {
+    static func renderImage(from view: some View, size: CGSize, scale: CGFloat) -> PlatformImage? {
         let renderer = ImageRenderer(content: view.frame(width: size.width, height: size.height))
-        renderer.scale = 3.0
+        renderer.scale = scale
         #if canImport(UIKit)
         let image = renderer.uiImage
         #elseif canImport(AppKit)
