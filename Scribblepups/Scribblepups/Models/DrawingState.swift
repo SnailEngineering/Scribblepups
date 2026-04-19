@@ -1,6 +1,7 @@
 import SwiftUI
 import OSLog
 
+@MainActor
 @Observable
 final class DrawingState {
     var strokes: [DrawingStroke] = []
@@ -84,10 +85,16 @@ final class DrawingState {
         case .stroke:
             if let last = strokes.popLast() {
                 redoStack.append(.stroke(last))
+                if redoStack.count > maxUndoDepth {
+                    redoStack.removeFirst()
+                }
             }
         case .sticker:
             if let last = stickers.popLast() {
                 redoStack.append(.sticker(last))
+                if redoStack.count > maxUndoDepth {
+                    redoStack.removeFirst()
+                }
             }
         }
         Logger.canvas.debug("Undo performed")

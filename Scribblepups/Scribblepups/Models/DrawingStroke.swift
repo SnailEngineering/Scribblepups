@@ -1,11 +1,11 @@
 import SwiftUI
 
-struct DrawingPoint: Sendable {
+struct DrawingPoint {
     var location: CGPoint
     var variation: CGFloat = CGFloat.random(in: 0.5...1.5)
 }
 
-struct DrawingStroke: Identifiable, Sendable {
+struct DrawingStroke: Identifiable {
     let id = UUID()
     var points: [DrawingPoint] = []
     var color: Color

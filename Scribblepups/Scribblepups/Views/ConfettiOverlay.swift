@@ -37,7 +37,7 @@ private struct ConfettiParticle: Identifiable {
     private static let emojis = ["🎉", "⭐️", "🌟", "✨", "💫", "🎊", "🌈", "💖"]
 
     init() {
-        emoji = Self.emojis.randomElement()!
+        emoji = Self.emojis.randomElement() ?? "🎉"
         size = CGFloat.random(in: 16...32)
         endX = CGFloat.random(in: -160...160)
         endY = CGFloat.random(in: 60...300)

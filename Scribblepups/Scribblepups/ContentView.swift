@@ -97,7 +97,11 @@ struct ContentView: View {
     }
 
     private func saveToPhotos() {
-        guard let image = renderCanvas() else { return }
+        guard let image = renderCanvas() else {
+            saveError = "Could not render the drawing."
+            showSaveError = true
+            return
+        }
         #if canImport(UIKit)
         Task {
             do {
@@ -117,7 +121,11 @@ struct ContentView: View {
     }
 
     private func shareDrawing() {
-        guard let image = renderCanvas() else { return }
+        guard let image = renderCanvas() else {
+            saveError = "Could not render the drawing."
+            showSaveError = true
+            return
+        }
         shareImage = image
         showShareSheet = true
         Haptics.tap()

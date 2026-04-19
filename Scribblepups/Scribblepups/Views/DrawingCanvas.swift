@@ -120,6 +120,7 @@ struct DrawingCanvas: View {
     // MARK: - Brush Renderers
 
     private func smoothPath(from points: [DrawingPoint]) -> Path {
+        guard !points.isEmpty else { return Path() }
         var path = Path()
         path.move(to: points[0].location)
         for i in 1..<points.count {
@@ -169,19 +170,21 @@ struct DrawingCanvas: View {
 
     private func drawRainbowStroke(_ stroke: DrawingStroke, in context: inout GraphicsContext) {
         let colors: [Color] = [.red, .orange, .yellow, .green, .blue, .purple]
+        // Build one path per color band, then stroke each once — reduces draw calls from N to 6
+        var paths = Array(repeating: Path(), count: colors.count)
         for i in 1..<stroke.points.count {
-            var segment = Path()
-            segment.move(to: stroke.points[i - 1].location)
-            segment.addLine(to: stroke.points[i].location)
-            context.stroke(
-                segment,
-                with: .color(colors[i % colors.count]),
-                style: StrokeStyle(lineWidth: stroke.lineWidth, lineCap: .round, lineJoin: .round)
-            )
+            let idx = i % colors.count
+            paths[idx].move(to: stroke.points[i - 1].location)
+            paths[idx].addLine(to: stroke.points[i].location)
+        }
+        let style = StrokeStyle(lineWidth: stroke.lineWidth, lineCap: .round, lineJoin: .round)
+        for (i, path) in paths.enumerated() {
+            context.stroke(path, with: .color(colors[i]), style: style)
         }
     }
 
     private func drawSparkleStroke(_ stroke: DrawingStroke, in context: inout GraphicsContext) {
+        guard !stroke.points.isEmpty else { return }
         var path = Path()
         path.move(to: stroke.points[0].location)
         for i in 1..<stroke.points.count {

@@ -8,6 +8,8 @@ struct ToolBar: View {
     var onSave: () -> Void
     var onShare: () -> Void
     @State private var photoSelection: PhotosPickerItem?
+    @State private var photoImportError: String?
+    @State private var showPhotoImportError = false
     @Environment(\.horizontalSizeClass) private var sizeClass
 
     private var isCompact: Bool { sizeClass == .compact }
@@ -116,15 +118,39 @@ struct ToolBar: View {
         .padding(.horizontal, outerPadding)
         .onChange(of: photoSelection) { _, newValue in
             Task {
-                guard let item = newValue,
-                      let data = try? await item.loadTransferable(type: Data.self) else { return }
-                #if canImport(UIKit)
-                state.setBackgroundImage(UIImage(data: data))
-                #elseif canImport(AppKit)
-                state.setBackgroundImage(NSImage(data: data))
-                #endif
-                photoSelection = nil
+                defer { photoSelection = nil }
+                guard let item = newValue else { return }
+                do {
+                    guard let data = try await item.loadTransferable(type: Data.self) else {
+                        photoImportError = "Could not load the selected photo."
+                        showPhotoImportError = true
+                        return
+                    }
+                    #if canImport(UIKit)
+                    guard let image = UIImage(data: data) else {
+                        photoImportError = "The selected photo could not be decoded."
+                        showPhotoImportError = true
+                        return
+                    }
+                    state.setBackgroundImage(image)
+                    #elseif canImport(AppKit)
+                    guard let image = NSImage(data: data) else {
+                        photoImportError = "The selected photo could not be decoded."
+                        showPhotoImportError = true
+                        return
+                    }
+                    state.setBackgroundImage(image)
+                    #endif
+                } catch {
+                    photoImportError = error.localizedDescription
+                    showPhotoImportError = true
+                }
             }
+        }
+        .alert("Couldn't Import Photo", isPresented: $showPhotoImportError) {
+            Button("OK") {}
+        } message: {
+            Text(photoImportError ?? "An unknown error occurred.")
         }
     }
 
