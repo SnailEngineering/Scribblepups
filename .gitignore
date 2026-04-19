@@ -60,3 +60,6 @@ fastlane/test_output
 
 # Instruments
 *.trace
+
+# Claude Code
+.claude/settings.local.json
