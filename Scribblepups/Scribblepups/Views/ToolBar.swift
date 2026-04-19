@@ -8,11 +8,18 @@ struct ToolBar: View {
     var onSave: () -> Void
     var onShare: () -> Void
     @State private var photoSelection: PhotosPickerItem?
+    @Environment(\.horizontalSizeClass) private var sizeClass
+
+    private var isCompact: Bool { sizeClass == .compact }
+    private var buttonSize: CGFloat { isCompact ? 36 : 44 }
+    private var buttonFont: Font { isCompact ? .body : .title2 }
+    private var outerPadding: CGFloat { isCompact ? 8 : 12 }
+    private var itemSpacing: CGFloat { isCompact ? 2 : 4 }
 
     var body: some View {
         HStack(spacing: 0) {
             // Drawing tools
-            HStack(spacing: 4) {
+            HStack(spacing: itemSpacing) {
                 toolButton(
                     icon: state.selectedBrush.iconName,
                     isActive: state.toolMode == .draw,
@@ -53,19 +60,19 @@ struct ToolBar: View {
 
                 PhotosPicker(selection: $photoSelection, matching: .images) {
                     Image(systemName: "photo.badge.plus.fill")
-                        .font(.title2)
-                        .frame(width: 44, height: 44)
+                        .font(buttonFont)
+                        .frame(width: buttonSize, height: buttonSize)
                 }
                 .accessibilityLabel("Import photo")
             }
-            .padding(.horizontal, 4)
-            .padding(.vertical, 4)
+            .padding(.horizontal, itemSpacing)
+            .padding(.vertical, itemSpacing)
             .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 12))
 
             Spacer()
 
             // History controls
-            HStack(spacing: 4) {
+            HStack(spacing: itemSpacing) {
                 toolButton(icon: "arrow.uturn.backward", isActive: false, label: "Undo") {
                     state.undo()
                     Haptics.tap()
@@ -84,14 +91,14 @@ struct ToolBar: View {
                 }
                 .disabled(!state.canUndo)
             }
-            .padding(.horizontal, 4)
-            .padding(.vertical, 4)
+            .padding(.horizontal, itemSpacing)
+            .padding(.vertical, itemSpacing)
             .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 12))
 
             Spacer()
 
             // Export controls
-            HStack(spacing: 4) {
+            HStack(spacing: itemSpacing) {
                 toolButton(icon: "square.and.arrow.down", isActive: false, label: "Save") {
                     onSave()
                 }
@@ -102,11 +109,11 @@ struct ToolBar: View {
                 }
                 .disabled(!hasContent)
             }
-            .padding(.horizontal, 4)
-            .padding(.vertical, 4)
+            .padding(.horizontal, itemSpacing)
+            .padding(.vertical, itemSpacing)
             .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 12))
         }
-        .padding(.horizontal, 12)
+        .padding(.horizontal, outerPadding)
         .onChange(of: photoSelection) { _, newValue in
             Task {
                 guard let item = newValue,
@@ -138,8 +145,8 @@ struct ToolBar: View {
     ) -> some View {
         Button(action: action) {
             Image(systemName: icon)
-                .font(.title2)
-                .frame(width: 44, height: 44)
+                .font(buttonFont)
+                .frame(width: buttonSize, height: buttonSize)
                 .background(isActive ? Color.accentColor.opacity(0.2) : .clear)
                 .clipShape(RoundedRectangle(cornerRadius: 8))
         }

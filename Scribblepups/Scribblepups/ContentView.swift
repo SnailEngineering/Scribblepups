@@ -154,6 +154,20 @@ struct ShareSheet: UIViewControllerRepresentable {
 }
 #endif
 
-#Preview {
+#Preview("iPhone Portrait") {
     ContentView()
+}
+
+#Preview("iPhone Landscape", traits: .landscapeLeft) {
+    ContentView()
+}
+
+#Preview("iPad Portrait") {
+    ContentView()
+        .previewDevice(PreviewDevice(rawValue: "iPad Pro 13-inch (M4)"))
+}
+
+#Preview("iPad Landscape", traits: .landscapeLeft) {
+    ContentView()
+        .previewDevice(PreviewDevice(rawValue: "iPad Pro 13-inch (M4)"))
 }
